@@ -16,7 +16,7 @@ verify:
 conda list
 ```
 
-##To test:
+## To test:
 ```
 python sentence-processor.py #(no data is saved in this test)
 python data_processor.py #(by default, does not delete data afterwards)
@@ -25,7 +25,7 @@ python pos_processor.py #(always cleans up)
 python writer.py #(after setting up data with 'python data_processor.py')
 ```
 
-##To run:
+## To run:
 for The Little Princess, download to same dir: https://www.gutenberg.org/cache/epub/146/pg146.txt
 then call:
 ```
