@@ -1,11 +1,12 @@
+import argparse
 from dao import save, load
 from writer import random_text, flatten
 from reader import process_file
 
-def main(run_test=False, read_file=None):
+def main(run_test=False, filename=None):
 	suffix_maps = ''
-	if read_file not None:
-		suffix_maps = process_file(read_file)
+	if filename not None:
+		suffix_maps = process_file(filename)
 		if not run_test:
 			save(suffix_maps)
 	else:
@@ -16,10 +17,16 @@ def main(run_test=False, read_file=None):
 		text = flatten(narration, dialog)
 		print(text)
 
-	#TODO command line options
 	#TODO tests
 	#TODO fun options like genderqueer pronouns, combine characters
 	#TODO at least 2 bugs: space after dialog before quote. Occasionally 2 quotes together, not sure why
 
 if __name__ == '__main__':
-	main()
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-R", "--run_test", help="test mode", action="store_true")
+	parser.add_argument("-f", "--filename", help="txt file to process")
+	args = parser.parse_args()
+	kwargs={'run_test': args.run_test}
+	if args.filename:
+		kwargs['filename'] = args.filename
+	main(**kwargs)
