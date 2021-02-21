@@ -1,102 +1,149 @@
-import nltk
-import os
-import shutil
-import argparse
-import shelve
-from sentence_processor import process_sentences
-from pos_processor import process_pos
+import random
 
-#Do we want to download the file?
-def process_file(filename):
-    """Reads a file and performs nltk analysis and markov analysis on the sentence structures.
-    filename: string. run the script with 
+suffix_map = {}        # map from prefixes to a list of suffixes
+prefix = ()            # current tuple of words
+suffix_map_dialog = {}
+prefix_dialog = ()
+
+def process_file(filename, order=3):
+	with open(filename) as fp:
+		is_dialog = False
+		word_so_far = ''
+		for c in fp.read():
+			if c == '"':
+				is_dialog = not is_dialog
+			if c in '".?!,':
+				if len(word_so_far) > 0:
+					process_word(word_so_far, is_dialog)
+					word_so_far = ''
+				process_word(c, is_dialog)#True for opening quote only. i think its good like that but test
+			elif c.isspace():
+				if len(word_so_far) > 0:
+					process_word(word_so_far, is_dialog)
+					word_so_far = ''
+			else:
+				word_so_far += c
+
+def process_word(word, is_dialog, order=3):
+	if is_dialog:
+		process_word_dialog(word, order)
+		return
+
+	global prefix
+	
+	if len(prefix) < order:
+		prefix += (word,)
+		return
+
+	try:
+		suffix_map[prefix].append(word)
+	except KeyError:
+		suffix_map[prefix] = [word]
+
+	prefix = shift(prefix, word)
+
+def process_word_dialog(word, order=3):
+	global prefix_dialog
+
+	if len(prefix_dialog) < order:
+		prefix_dialog += (word,)
+		return
+
+	try:
+		suffix_map_dialog[prefix_dialog].append(word)
+	except KeyError:
+		suffix_map_dialog[prefix_dialog] = [word]#Theres a better way to do this, like setdefault or something
+
+	prefix_dialog = shift(prefix_dialog, word)
+
+def shift(t, word):
+    """Forms a new tuple by removing the head and adding word to the tail.
+    t: tuple of strings
+    word: string
+    Returns: tuple of strings
     """
-    fp = open(filename)
-    skip_gutenberg_header(fp)
-    #TODO skip chapter numbers and names like: 1\n\nSara
+    return t[1:] + (word,)
 
-    sentences = list()
-    pos_map = list()
+def get_start(is_dialog):
+	sentence_boundaries = set('.?!"')
+	s_m = get_suffix_map(is_dialog)
+	start = random.choice(list(s_m.keys()))
+	if start[0] not in sentence_boundaries:
+		return get_start(is_dialog)
+	else:
+		suffixes = s_m.get(start, None)
+		word = random.choice(suffixes)
+		start = shift(start, word)
+		return start
 
-# must we read line by line instead of the whole file? do we even want to tokenize the whole file at once? going line by line could help with chapter breaks
-#looks like read instead of readlines goes letter by letter
-    punct_was_last = False
-    sentence_in_progress = list()
-    with open(filename) as fp:
-        for line in fp.readlines():
-            if line.startswith('End of Project'): 
-                break
-            #TODO continue (twice if possible?) if line is just a number. that is a chapter header
-            words = nltk.word_tokenize(line)
-            words_tagged = nltk.pos_tag(words);
-            for word, pos in words_tagged:
-                if punct_was_last and pos != "''": #TODO see readme for what this even means. so it wont work because sentences are not always markov - sometimes they are just random like the first sentence. so anything inside quotes must be part of 1 sentence
-                    sentences.append(sentence_in_progress)
-                    sentence_in_progress = list()
-                sentence_in_progress.append(pos)
-                pos_map.append((word, pos))
-                punct_was_last = pos is '.'
-    process_sentences(sentences)
-    process_pos(pos_map)
-
-def skip_gutenberg_header(fp):
-    """Reads from fp until it finds the line that ends the header.
-    fp: open file object
+def random_text(is_dialog, n=500):
+    """Generates random wordsfrom the analyzed text.
+    Starts with a random prefix from the dictionary.
+    n: number of characters to generate
     """
-    for line in fp:
-        if line == ('Sara'):
-            break
+    s = get_start(is_dialog)
+    text_so_far = ' '.join(s)
+    while len(text_so_far) < n:
+        word = next_word(is_dialog, s)
+        if word == None:
+            s = get_start(is_dialog)
+            text_so_far += ' '.join(s)
+        else:
+            space = get_space(word, is_dialog)
+            text_so_far += space + word
+            s = shift(s, word)
+    return text_so_far
 
-def main(cleanup=False, filename='thelittletest.txt'):
-	#TODO check if filename is the test default. if so, run tests. (otherwise the tests will fail)
-	print("Testing main data_processor module...")
+def get_space(word, is_dialog):
+	if word in '.?!,':
+		return ''
+	else:
+		return ' '
+
+def next_word(is_dialog, start):
+    suffixes = get_suffix_map(is_dialog).get(start, None)
+    if suffixes == None:
+    	return None
+    return random.choice(suffixes)
+
+def get_suffix_map(is_dialog):
+	return suffix_map if not is_dialog else suffix_map_dialog
+
+def flatten(narration, dialog):
+	is_dialog = False
+	text = ''
+	more_quotes = True
+	while more_quotes:
+		if is_dialog:
+			i = get_quote_i(dialog)
+			text += dialog[0:i]
+			dialog = dialog[i:]
+			more_quotes = bool(dialog)
+		else:
+			i = get_quote_i(narration)
+			text += narration[0:i]
+			narration = narration[i:]
+			more_quotes = bool(narration)
+		is_dialog = not is_dialog
+	return text
+
+def get_quote_i(text):
+	if '"' in text:
+		return text.index('"') + 1
+	else:
+		return len(text)
+
+def main(cleanup=False, filename='thelittletest3.txt'):
 	process_file(filename)
-	proper_names_file = 'histogram_pos/NNP_pos.txt'
-	sentence_map_db = 'sentence_markov'
-	sentence_list_db = 'sentence_list'
-	assert(os.path.exists(proper_names_file))
-	with open(proper_names_file) as fp:
-		for line in fp.readlines():
-			assert "8: 'Sara'" in line
-#	assert(os.path.exists('sentence_list.txt'))
-#	assert(os.path.exists(sentence_markov_file))
-#	with dbm.open(sentence_map_db) as fin_sentences:
-#		for key in fin_sentences:
-#			print(key, fin_sentences[key])
-#		print(fin_sentences[str.encode(str((0,1)))])
-#	with open(sentence_markov_file) as fp2:
-#		for line2 in fp2.readlines():
-#			assert "{(0, 1): [2], (1, 2): [3], (2, 3): [4]}" in line2
-	with shelve.open(sentence_list_db) as shelf_ids:
-		assert(len(shelf_ids.items()) is 5)
-	with shelve.open(sentence_map_db) as shelf:
-		assert(len(shelf.items()) is 3)
-	print("Success!")
-
-	if cleanup is True:
-		print("Cleaning up...")
-		shutil.rmtree('histogram_pos')
-		#print(os.listdir())
-		os.remove(sentence_map_db + '.dat')
-		os.remove(sentence_map_db + '.dir')
-		os.remove(sentence_map_db + '.bak')
-		os.remove(sentence_list_db + '.dat')
-		os.remove(sentence_list_db + '.dir')
-		os.remove(sentence_list_db + '.bak')
-		print("Done.")
+	narration = random_text(False)
+	dialog = random_text(True)
+	text = flatten(narration, dialog)
+	print(text)
+	#TODO save and load the markov chains
+	#TODO command line options
+	#TODO tests
+	#TODO fun options like genderqueer pronouns, combine characters
+	#TODO at least 2 bugs: space after dialog before quote. Occasionally 2 quotes together, not sure why
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser()
-	parser.add_argument("-C", "--cleanup", help="delete data files afterwards", action="store_true")
-	parser.add_argument("-f", "--filename", help="txt file to process")
-	args = parser.parse_args()
-	kwargs={'cleanup': args.cleanup}
-	if args.filename:
-		kwargs['filename'] = args.filename
-	main(**kwargs)
-
-#consider making a human-readable database option. saving as text with no pickling to bytes
-
-#consider putting this "main" stuff in another file
-#consider honoring cleanup when something goes wrong
-#TODO consider refactoring to be more OO
+	main()
