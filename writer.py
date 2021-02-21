@@ -49,7 +49,7 @@ def next_word(suffix_map, start):
     	return None
     return random.choice(suffixes)
 
-def flatten(narration, dialog):
+def flatten(narration, dialog, n=500):
 	is_dialog = False
 	text = ''
 	more_quotes = True
@@ -65,7 +65,7 @@ def flatten(narration, dialog):
 			narration = narration[i:]
 			more_quotes = bool(narration)
 		is_dialog = not is_dialog
-	return text
+	return text[0:n]
 
 def get_quote_pos(text):
 	if '"' in text:
