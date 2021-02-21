@@ -5,7 +5,6 @@ from reader import process_file
 
 def main(run_test=False, filename=None, n=500):
 	suffix_maps = ''
-	print("file is " + filename)
 	if filename is not None:
 		suffix_maps = process_file(filename)
 		if not run_test:
@@ -23,10 +22,12 @@ def main(run_test=False, filename=None, n=500):
 	#TODO at least 2 bugs: space after dialog before quote. Occasionally 2 quotes together, not sure why
 
 def test(text, n, filename=None):
+	print("Checking test assertions...")
 	assert(len(text)) == n
 	#python .\main.py --run_test --filename='thelittletest2.txt' -n=34
-	if name == 'thelittletest2.txt' and n == 34:
+	if filename == 'thelittletest2.txt' and n == 34:
 		assert(text == 'Only one possibility. "This is it.')
+	print("Success!")
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
